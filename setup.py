@@ -63,13 +63,13 @@ setup(
     url="https://github.com/ApeWorX/ape-ledger",
     include_package_data=True,
     install_requires=[
-        "eth-ape>=0.8.1,<0.9",
+        "eth-ape>=0.8.43,<0.9",
         "ledgereth>=0.10.0,<0.11",
         "click",  # Use same version as eth-ape
         "rich",  # Use same version as eth-ape
         # ApeWorX-owned
         "ethpm-types",  # Use same version as eth-ape
-        "eip712",  # Use same version as eth-ape
+        "eip712>=0.3",  # Use same version as eth-ape
         # EF Dependencies
         "eth-account",  # Use same version as eth-ape
         "eth-utils",  # Use same version as eth-ape
@@ -79,7 +79,7 @@ setup(
             "ape_ledger=ape_ledger._cli:cli",
         ],
     },
-    python_requires=">=3.9,<4",
+    python_requires=">=3.10,<4",
     extras_require=extras_require,
     py_modules=["ape_ledger"],
     license="Apache-2.0",
@@ -95,10 +95,10 @@ setup(
         "Operating System :: MacOS",
         "Operating System :: POSIX",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
         "Programming Language :: Python :: 3.13",
+        "Programming Language :: Python :: 3.14",
     ],
 )

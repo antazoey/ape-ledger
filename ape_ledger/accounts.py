@@ -1,17 +1,17 @@
 import json
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import rich
 from ape.api import AccountAPI, AccountContainerAPI, TransactionAPI
 from ape.types import AddressType, MessageSignature, TransactionSignature
 from ape_ethereum.transactions import DynamicFeeTransaction, StaticFeeTransaction
-from dataclassy import asdict
-from eip712 import EIP712Message, EIP712Type
+from eip712 import EIP712Message
 from eth_account.messages import SignableMessage, encode_defunct
 from eth_pydantic_types import HexBytes
 from eth_utils import is_0x_prefixed, to_bytes
+from ledgereth.exceptions import LedgerError
 
 from ape_ledger.client import LedgerDeviceClient, get_device
 from ape_ledger.exceptions import LedgerSigningError
@@ -71,27 +71,20 @@ class AccountContainer(AccountContainerAPI):
 
 
 def _echo_object_to_sign(obj: Any):
-    suffix = "Please follow the prompts on your device."
+
     if isinstance(obj, EIP712Message):
+        # NOTE: pydantic models actually have very nice `rich.print` support
+        rich.print(obj)
 
-        def make_str(val) -> str:
-            if isinstance(val, dict):
-                return ", ".join([f"{k}={make_str(v)}" for k, v in val.items()])
-            elif isinstance(val, EIP712Type):
-                subfields_str = make_str(asdict(val))
-                return f"{repr(val)}({subfields_str})"
-            elif isinstance(val, (tuple, list, set)):
-                inner = ", ".join([make_str(x) for x in val])
-                return f"[{inner}]"
-            else:
-                return f"{val}"
+        # NOTE: Ledger Nano devices only show domain hash and message hash for EIP712
+        _, domain_hash, message_hash = obj.signable_message
+        rich.print(f"Domain Hash: 0x{domain_hash.hex().upper()}")
+        rich.print(f"Message Hash: 0x{message_hash.hex().upper()}")
 
-        fields_str = make_str(obj._body_["message"])
-        message_str = f"{repr(obj)}({fields_str})"
-    else:
-        message_str = f"{obj}"
+    else:  # NOTE: Do this to capture our native handling of TransactionAPI
+        rich.print(str(obj))
 
-    rich.print(f"{message_str}\n{suffix}")
+    rich.print("\nPlease follow the prompts on your device.\n")
 
 
 class LedgerAccount(AccountAPI):
@@ -119,7 +112,7 @@ class LedgerAccount(AccountAPI):
     def account_file(self) -> dict:
         return json.loads(self.account_file_path.read_text())
 
-    def sign_message(self, msg: Any, **signer_options) -> Optional[MessageSignature]:
+    def sign_message(self, msg: Any, **signer_options) -> MessageSignature | None:
         use_eip712_package = isinstance(msg, EIP712Message)
         use_eip712 = use_eip712_package
         if isinstance(msg, str):
@@ -165,15 +158,23 @@ class LedgerAccount(AccountAPI):
         if use_eip712:
             header = HexBytes(msg_to_sign.header)
             body = HexBytes(msg_to_sign.body)
-            signed_msg = self._client.sign_typed_data(header, body)
+            try:
+                signed_msg = self._client.sign_typed_data(header, body)
+
+            except LedgerError:
+                return None
 
         else:
-            signed_msg = self._client.sign_message(msg_to_sign.body)
+            try:
+                signed_msg = self._client.sign_message(msg_to_sign.body)
+
+            except LedgerError:
+                return None
 
         v, r, s = signed_msg
         return MessageSignature(v=v, r=HexBytes(r), s=HexBytes(s))
 
-    def sign_transaction(self, txn: TransactionAPI, **kwargs) -> Optional[TransactionAPI]:
+    def sign_transaction(self, txn: TransactionAPI, **kwargs) -> TransactionAPI | None:
         txn.chain_id = 1
         txn_dict: dict = {
             "nonce": txn.nonce,
